@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block title %}Lista de Colaboradores{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h1>Colaboradores</h1>
+  <a href="{{ url_for('adicionar_colaborador') }}" class="btn btn-success">
+    <i class="bi bi-plus-circle"></i> Adicionar
+  </a>
+</div>
+
+<div class="table-responsive">
+  <table class="table table-striped table-hover align-middle">
+    <thead class="table-primary">
+      <tr>
+        <th>ID</th>
+        <th>Nome</th>
+        <th>Admissão</th>
+        <th>Ações</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for col in colaboradores %}
+      <tr>
+        <td>{{ col[0] }}</td>
+        <td><strong>{{ col[1] }}</strong></td>
+        <td>{{ col[2] }}</td>
+        <td>
+          <a href="{{ url_for('detalhes_colaborador', col_id=col[0]) }}" class="btn btn-info btn-xs">
+            <i class="bi bi-eye"></i>
+          </a>
+          <a href="{{ url_for('editar_colaborador', col_id=col[0]) }}" class="btn btn-warning btn-xs">
+            <i class="bi bi-pencil"></i>
+          </a>
+          <form action="{{ url_for('excluir_colaborador', col_id=col[0]) }}" method="post" class="d-inline">
+            <button type="submit" class="btn btn-danger btn-xs" onclick="return confirm('Excluir colaborador?')">
+              <i class="bi bi-trash"></i>
+            </button>
+          </form>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="4" class="text-center text-muted">Nenhum colaborador cadastrado.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

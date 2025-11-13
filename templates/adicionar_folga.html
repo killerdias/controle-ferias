@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}Adicionar Folga{% endblock %}
+
+{% block content %}
+<h1 class="mb-4">Adicionar Folga</h1>
+
+<div class="alert alert-info d-flex align-items-center">
+  <i class="bi bi-info-circle me-2"></i>
+  <strong>Você tem {{ folgas_pendentes }} folga{{ 's' if folgas_pendentes != 1 else '' }} disponível{{ 'eis' if folgas_pendentes != 1 else '' }}</strong>
+</div>
+
+<form method="post">
+  {{ form.hidden_tag() }}
+  <div class="mb-3">
+    {{ form.dia_folga.label(class="form-label") }}
+    {{ form.dia_folga(class="form-control") }}
+  </div>
+  <div class="mb-3">
+    {{ form.quantidade.label(class="form-label") }}
+    {{ form.quantidade(class="form-control", min="1", max=folgas_pendentes) }}
+    <div class="form-text">Máximo: {{ folgas_pendentes }} dia{{ 's' if folgas_pendentes > 1 else '' }}</div>
+  </div>
+  <div class="mb-3">
+    {{ form.motivo.label(class="form-label") }}
+    {{ form.motivo(class="form-control", placeholder="Ex: Aniversário, consulta médica") }}
+  </div>
+  <div class="d-flex gap-2">
+    {{ form.submit(class="btn btn-primary") }}
+    <a href="{{ url_for('detalhes_colaborador', col_id=col_id) }}" class="btn btn-secondary">Cancelar</a>
+  </div>
+</form>
+{% endblock %}

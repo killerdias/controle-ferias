@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+{% block title %}Resumo Folgas - {{ nome }}{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h1>Resumo de Folgas</h1>
+  <a href="{{ url_for('detalhes_colaborador', col_id=col_id) }}" class="btn btn-outline-secondary">
+    Voltar
+  </a>
+</div>
+
+<div class="card mb-4 shadow-sm">
+  <div class="card-body text-center">
+    <h5><strong>{{ nome }}</strong></h5>
+    <p class="mb-0">Copie o resumo para o WhatsApp</p>
+  </div>
+</div>
+
+<!-- WHATSAPP -->
+<div class="card border-success mb-4">
+  <div class="card-header bg-success text-white">
+    <strong>Texto para WhatsApp</strong>
+  </div>
+  <div class="card-body">
+    <pre class="mb-3 p-3 bg-light rounded" style="white-space: pre-wrap; font-family: monospace;" id="textoWhatsapp">{{ texto_whatsapp }}</pre>
+    <button onclick="copiarTexto()" class="btn btn-success btn-sm">
+      Copiar
+    </button>
+  </div>
+</div>
+
+<!-- JÁ TIRADAS -->
+{% if tiradas %}
+<div class="card mb-3">
+  <div class="card-header bg-success text-white">
+    <strong>Já Tiradas</strong>
+  </div>
+  <div class="list-group list-group-flush">
+    {% for data in tiradas %}
+      {% set dia = data[0].split('-')[2] %}
+      {% set mes = data[0].split('-')[1] %}
+      {% set ano = data[0].split('-')[0] %}
+      <div class="list-group-item d-flex justify-content-between align-items-center">
+        <strong>{{ dia }}/{{ mes }}/{{ ano }}</strong>
+        <span class="badge bg-success">Tirada</span>
+      </div>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
+<!-- AGENDADAS -->
+<div class="card">
+  <div class="card-header bg-warning text-dark">
+    <strong>Agendado para</strong>
+  </div>
+  <div class="list-group list-group-flush">
+    {% for data in agendadas %}
+      {% set dia = data[0].split('-')[2] %}
+      {% set mes = data[0].split('-')[1] %}
+      {% set ano = data[0].split('-')[0] %}
+      <div class="list-group-item d-flex justify-content-between align-items-center">
+        <strong>{{ dia }}/{{ mes }}/{{ ano }}</strong>
+        <span class="badge bg-warning text-dark">Pendente</span>
+      </div>
+    {% else %}
+      <div class="list-group-item text-center text-muted">Nenhuma folga agendada</div>
+    {% endfor %}
+  </div>
+</div>
+
+<script>
+function copiarTexto() {
+  const texto = document.getElementById('textoWhatsapp').innerText;
+  navigator.clipboard.writeText(texto).then(() => {
+    alert('Texto copiado! Cole no WhatsApp.');
+  });
+}
+</script>
+
+{% endblock %}

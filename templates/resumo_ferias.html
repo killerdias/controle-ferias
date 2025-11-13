@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% block title %}Resumo Férias - {{ nome }}{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h1>Resumo de Férias</h1>
+  <a href="{{ url_for('detalhes_colaborador', col_id=col_id) }}" class="btn btn-outline-secondary">
+    Voltar
+  </a>
+</div>
+
+<div class="card mb-4 shadow-sm">
+  <div class="card-body">
+    <h5><strong>{{ nome }}</strong></h5>
+    <p class="mb-0">Copie o resumo para o WhatsApp</p>
+  </div>
+</div>
+
+<div class="card border-success mb-4">
+  <div class="card-header bg-success text-white">
+    <strong>Texto para WhatsApp</strong>
+  </div>
+  <div class="card-body">
+    <pre class="mb-3 p-3 bg-light rounded" style="white-space: pre-wrap; font-family: monospace;" id="textoWhatsapp">{{ texto_whatsapp }}</pre>
+    <button onclick="copiarTexto()" class="btn btn-success btn-sm">
+      Copiar
+    </button>
+  </div>
+</div>
+
+<div class="table-responsive">
+  <table class="table table-hover">
+    <thead class="table-primary">
+      <tr>
+        <th>Ano</th>
+        <th>Pendentes</th>
+        <th>Tirados</th>
+        <th>Saldo</th>
+        <th>Previsão</th>
+        <th>Vendas</th>
+        <th>Data Tirada</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for f in ferias %}
+      <tr>
+        <td>{{ f[2] }}</td>
+        <td>{{ f[3] or '-' }}</td>
+        <td>{{ f[4] or '-' }}</td>
+        <td><strong>{{ f[5] or '-' }}</strong></td>
+        <td>{{ f[6] or '-' }}</td>
+        <td>{{ f[7] or '-' }}</td>
+        <td>{{ f[8] or '-' }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="7" class="text-center text-muted">Nenhum registro</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<script>
+function copiarTexto() {
+  const texto = document.getElementById('textoWhatsapp').innerText;
+  navigator.clipboard.writeText(texto).then(() => {
+    alert('Texto copiado! Cole no WhatsApp.');
+  });
+}
+</script>
+
+{% endblock %}

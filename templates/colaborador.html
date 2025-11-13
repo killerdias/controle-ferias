@@ -1,0 +1,176 @@
+{% extends "base.html" %}
+{% block title %}Detalhes - {{ colaborador[1] }}{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h1>{{ colaborador[1] }}</h1>
+  <a href="{{ url_for('inicio') }}" class="btn btn-outline-secondary">Voltar</a>
+</div>
+
+<div class="card mb-4 shadow-sm">
+  <div class="card-body">
+    <p><strong>ID:</strong> {{ colaborador[0] }}</p>
+    <p><strong>Admissão:</strong> {{ colaborador[2] }}</p>
+    <p><strong>Saldo de folgas:</strong> <span class="badge bg-info">{{ saldo_folgas }}</span></p>
+    <p><strong>Saldo de férias:</strong> <span class="badge bg-primary">{{ saldo_ferias }} dia{{ 's' if saldo_ferias != 1 else '' }}</span></p>
+    <a href="{{ url_for('editar_colaborador', col_id=colaborador[0]) }}" class="btn btn-warning btn-sm">
+      Editar Colaborador
+    </a>
+  </div>
+</div>
+
+<!-- FÉRIAS -->
+<section class="mb-5">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h3>Férias</h3>
+    <div>
+      <a href="{{ url_for('adicionar_ferias', col_id=colaborador[0]) }}" class="btn btn-success btn-sm me-2">
+        Adicionar Registro
+      </a>
+      <a href="{{ url_for('resumo_ferias', col_id=colaborador[0]) }}" class="btn btn-success btn-sm">
+        Resumo WhatsApp
+      </a>
+    </div>
+  </div>
+  <div class="table-responsive">
+    <table class="table table-hover">
+      <thead class="table-primary">
+        <tr>
+          <th>Ano</th>
+          <th>Pendentes</th>
+          <th>Tirados</th>
+          <th>Saldo</th>
+          <th>Previsão</th>
+          <th>Data Tirada</th>
+          <th>Ações</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for f in ferias_registros %}
+        <tr>
+          <td>{{ f[2] }}</td>
+          <td>{{ f[3] or '-' }}</td>
+          <td>{{ f[4] or '-' }}</td>
+          <td><strong>{{ f[5] or '-' }}</strong></td>
+          <td>{{ f[6] or '-' }}</td>
+          <td>{{ f[8] or '-' }}</td>
+          <td>
+            <a href="{{ url_for('editar_ferias', ferias_id=f[0]) }}" class="btn btn-warning btn-xs">
+              Editar
+            </a>
+            <form action="{{ url_for('excluir_ferias', ferias_id=f[0]) }}" method="post" class="d-inline">
+              {{ form.hidden_tag() }}
+              <button type="submit" class="btn btn-danger btn-xs" onclick="return confirm('Excluir este registro de férias?')">
+                Excluir
+              </button>
+            </form>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="7" class="text-center text-muted">Nenhum registro de férias</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- FOLGAS CONCEDIDAS -->
+<section class="mb-5">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h3>Folgas Concedidas</h3>
+    <a href="{{ url_for('conceder_folgas', col_id=colaborador[0]) }}" class="btn btn-success btn-sm">
+      Conceder Folgas
+    </a>
+  </div>
+  <div class="table-responsive">
+    <table class="table table-hover">
+      <thead class="table-success">
+        <tr>
+          <th>Data Concessão</th>
+          <th>Quantidade</th>
+          <th>Motivo</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for f in folgas_concedidas %}
+        <tr>
+          <td>{{ f[3] }}</td>
+          <td><strong>{{ f[2] }}</strong></td>
+          <td>{{ f[4] or '-' }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="3" class="text-center text-muted">Nenhuma folga concedida</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- SALDO E AÇÕES -->
+<div class="alert alert-info d-flex justify-content-between align-items-center mb-4">
+  <div>
+    <strong>Saldo de folgas: {{ saldo_folgas }}</strong>
+  </div>
+  <div>
+    {% if saldo_folgas > 0 %}
+    <a href="{{ url_for('marcar_folga', col_id=colaborador[0]) }}" class="btn btn-primary btn-sm me-2">
+      Marcar Folga
+    </a>
+    {% endif %}
+    <a href="{{ url_for('resumo_folgas', col_id=colaborador[0]) }}" class="btn btn-success btn-sm">
+      Resumo WhatsApp
+    </a>
+  </div>
+</div>
+
+<!-- FOLGAS MARCADAS -->
+<section>
+  <h3>Folgas Marcadas</h3>
+  <div class="table-responsive">
+    <table class="table table-hover">
+      <thead class="table-warning">
+        <tr>
+          <th>Data</th>
+          <th>Status</th>
+          <th>Ações</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for f in folgas_tiradas %}
+        <tr>
+          <td>{{ f[2] }}</td>
+          <td>
+            <span class="badge bg-{{ 'success' if f[3] == 'tirada' else 'warning' }}">
+              {{ 'Tirada' if f[3] == 'tirada' else 'Pendente' }}
+            </span>
+          </td>
+          <td>
+            {% if f[3] == 'pendente' %}
+            <form action="{{ url_for('confirmar_folga', folga_id=f[0]) }}" method="post" class="d-inline">
+              {{ form.hidden_tag() }}
+              <button type="submit" class="btn btn-success btn-xs" onclick="return confirm('Confirmar como tirada?')">
+                Confirmar
+              </button>
+            </form>
+            {% endif %}
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="3" class="text-center text-muted">Nenhuma folga marcada</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- EXCLUIR COLABORADOR -->
+<div class="mt-5">
+  <form action="{{ url_for('excluir_colaborador', col_id=colaborador[0]) }}" method="post" class="d-inline">
+    {{ form.hidden_tag() }}
+    <button type="submit" class="btn btn-danger" onclick="return confirm('Tem certeza que deseja EXCLUIR este colaborador e todos os seus dados?')">
+      Excluir Colaborador
+    </button>
+  </form>
+</div>
+
+{% endblock %}

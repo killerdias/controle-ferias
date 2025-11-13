@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}Editar Férias{% endblock %}
+
+{% block content %}
+<h1 class="mb-4">Editar Registro de Férias</h1>
+<form method="post">
+  {{ form.hidden_tag() }}
+  <div class="mb-3">
+    {{ form.ano.label(class="form-label") }}
+    {{ form.ano(class="form-control") }}
+  </div>
+  <div class="mb-3">
+    {{ form.dias_pendentes.label(class="form-label") }}
+    {{ form.dias_pendentes(class="form-control") }}
+  </div>
+  <div class="mb-3">
+    {{ form.dias_tirados.label(class="form-label") }}
+    {{ form.dias_tirados(class="form-control") }}
+  </div>
+  <div class="mb-3">
+    {{ form.saldo.label(class="form-label") }}
+    {{ form.saldo(class="form-control") }}
+  </div>
+  <div class="mb-3">
+    {{ form.previsao.label(class="form-label") }}
+    {{ form.previsao(class="form-control") }}
+  </div>
+  <div class="mb-3">
+    {{ form.vendas.label(class="form-label") }}
+    {{ form.vendas(class="form-control") }}
+  </div>
+  <div class="mb-3">
+    {{ form.data_tirada.label(class="form-label") }}
+    {{ form.data_tirada(class="form-control") }}
+  </div>
+  <div class="d-flex gap-2">
+    {{ form.submit(class="btn btn-primary") }}
+    <a href="{{ url_for('detalhes_colaborador', col_id=col_id) }}" class="btn btn-secondary">Cancelar</a>
+  </div>
+</form>
+{% endblock %}
