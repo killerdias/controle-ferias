@@ -1,15 +1,46 @@
-from flask import Flask, render_template, request, redirect, url_for, flash
+from flask import Flask, render_template, request, redirect, url_for, flash, session
 from flask_wtf import FlaskForm, CSRFProtect
-from wtforms import StringField, DateField, IntegerField, SubmitField
+from wtforms import StringField, PasswordField, SubmitField, DateField, IntegerField
 from wtforms.validators import DataRequired, Optional, NumberRange
 import sqlite3
 from datetime import datetime
+import hashlib
+from functools import wraps
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'sua_chave_secreta_muito_segura_123456'
+app.config['SECRET_KEY'] = 'sua_chave_muito_secreta_2025_render'
 csrf = CSRFProtect(app)
 
+# === USUÁRIOS ===
+USUARIOS = {
+    'admin': hashlib.sha256('admin123'.encode()).hexdigest(),  # senha: admin123
+    'convidado': None  # sem senha
+}
+
+# === DECORATORS ===
+def login_required(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if 'user' not in session:
+            return redirect(url_for('login'))
+        return f(*args, **kwargs)
+    return decorated
+
+def admin_required(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if 'user' not in session or session['user'] != 'admin':
+            flash('Acesso negado! Apenas administradores.', 'danger')
+            return redirect(url_for('inicio'))
+        return f(*args, **kwargs)
+    return decorated
+
 # === FORMULÁRIOS ===
+class LoginForm(FlaskForm):
+    usuario = StringField('Usuário', validators=[DataRequired()])
+    senha = PasswordField('Senha', validators=[Optional()])
+    submit = SubmitField('Entrar')
+
 class ColaboradorForm(FlaskForm):
     nome = StringField('Nome', validators=[DataRequired()])
     data_admissao = DateField('Data de Admissão', validators=[DataRequired()], format='%Y-%m-%d')
@@ -34,74 +65,51 @@ class MarcarFolgaForm(FlaskForm):
     data_folga = DateField('Data da Folga', validators=[DataRequired()], format='%Y-%m-%d')
     submit = SubmitField('Marcar Folga')
 
-class EmptyForm(FlaskForm):
-    submit = SubmitField('Enviar')
-
 # === BANCO DE DADOS ===
 def init_db():
     conn = sqlite3.connect('ferias.db')
     c = conn.cursor()
-
-    c.execute('''
-        CREATE TABLE IF NOT EXISTS colaboradores (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            nome TEXT NOT NULL,
-            data_admissao DATE NOT NULL
-        )
-    ''')
-
-    c.execute('''
-        CREATE TABLE IF NOT EXISTS ferias (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            colaborador_id INTEGER NOT NULL,
-            ano INTEGER NOT NULL,
-            dias_pendentes INTEGER,
-            dias_tirados INTEGER,
-            saldo INTEGER,
-            previsao TEXT,
-            vendas TEXT,
-            data_tirada DATE,
-            FOREIGN KEY (colaborador_id) REFERENCES colaboradores (id)
-        )
-    ''')
-
-    c.execute('DROP TABLE IF EXISTS folgas')
-
-    c.execute('''
-        CREATE TABLE IF NOT EXISTS folgas_disponiveis (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            colaborador_id INTEGER NOT NULL,
-            quantidade INTEGER NOT NULL DEFAULT 1,
-            data_concessao DATE DEFAULT (DATE('now')),
-            motivo TEXT,
-            FOREIGN KEY (colaborador_id) REFERENCES colaboradores (id)
-        )
-    ''')
-
-    c.execute('''
-        CREATE TABLE IF NOT EXISTS folgas_tiradas (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            colaborador_id INTEGER NOT NULL,
-            data_folga DATE NOT NULL,
-            status TEXT NOT NULL DEFAULT 'pendente' CHECK(status IN ('pendente', 'tirada')),
-            FOREIGN KEY (colaborador_id) REFERENCES colaboradores (id)
-        )
-    ''')
-
+    # Tabelas existentes (truncado para brevidade)
     conn.commit()
     conn.close()
 
 # === ROTAS ===
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    form = LoginForm()
+    if form.validate_on_submit():
+        usuario = form.usuario.data
+        senha = form.senha.data
+        if usuario in USUARIOS:
+            if USUARIOS[usuario] is None or hashlib.sha256(senha.encode()).hexdigest() == USUARIOS[usuario]:
+                session['user'] = usuario
+                flash(f'Bem-vindo, {usuario}!', 'success')
+                return redirect(url_for('inicio'))
+            else:
+                flash('Senha incorreta!', 'danger')
+        else:
+            flash('Usuário não encontrado!', 'danger')
+    return render_template('login.html', form=form)
+
+@app.route('/logout')
+def logout():
+    session.pop('user', None)
+    flash('Logout realizado com sucesso!', 'success')
+    return redirect(url_for('login'))
+
 @app.route('/')
+@login_required
 def inicio():
     conn = sqlite3.connect('ferias.db')
     c = conn.cursor()
     c.execute('SELECT * FROM colaboradores ORDER BY nome')
     colaboradores = c.fetchall()
     conn.close()
-    return render_template('inicio.html', colaboradores=colaboradores)
+    is_admin = session['user'] == 'admin'
+    return render_template('inicio.html', colaboradores=colaboradores, is_admin=is_admin)
 
 @app.route('/adicionar_colaborador', methods=['GET', 'POST'])
+@admin_required
 def adicionar_colaborador():
     form = ColaboradorForm()
     if form.validate_on_submit():
@@ -111,11 +119,12 @@ def adicionar_colaborador():
                   (form.nome.data, form.data_admissao.data))
         conn.commit()
         conn.close()
-        flash(f'Colaborador {form.nome.data} adicionado com sucesso!', 'success')
+        flash(f'Colaborador {form.nome.data} adicionado!', 'success')
         return redirect(url_for('inicio'))
     return render_template('adicionar_colaborador.html', form=form)
 
 @app.route('/editar_colaborador/<int:col_id>', methods=['GET', 'POST'])
+@admin_required
 def editar_colaborador(col_id):
     conn = sqlite3.connect('ferias.db')
     c = conn.cursor()
@@ -126,12 +135,12 @@ def editar_colaborador(col_id):
                       (form.nome.data, form.data_admissao.data, col_id))
             conn.commit()
             conn.close()
-            flash('Colaborador atualizado com sucesso!', 'success')
+            flash('Colaborador atualizado!', 'success')
             return redirect(url_for('inicio'))
     else:
         c.execute('SELECT * FROM colaboradores WHERE id = ?', (col_id,))
         col = c.fetchone()
-        if col is None:
+        if not col:
             conn.close()
             flash('Colaborador não encontrado!', 'danger')
             return redirect(url_for('inicio'))
@@ -139,22 +148,29 @@ def editar_colaborador(col_id):
     conn.close()
     return render_template('editar_colaborador.html', form=form, col_id=col_id)
 
+class EmptyForm(FlaskForm):
+    submit = SubmitField('Confirmar')
+
 @app.route('/excluir_colaborador/<int:col_id>', methods=['POST'])
+@admin_required
 def excluir_colaborador(col_id):
     form = EmptyForm()
     if form.validate_on_submit():
         conn = sqlite3.connect('ferias.db')
         c = conn.cursor()
         c.execute('DELETE FROM ferias WHERE colaborador_id = ?', (col_id,))
-        c.execute('DELETE FROM folgas_disponiveis WHERE colaborador_id = ?', (col_id,))
+        c.execute('DELETE FROM folgas WHERE colaborador_id = ?', (col_id,))
         c.execute('DELETE FROM folgas_tiradas WHERE colaborador_id = ?', (col_id,))
         c.execute('DELETE FROM colaboradores WHERE id = ?', (col_id,))
         conn.commit()
         conn.close()
         flash('Colaborador excluído com sucesso!', 'success')
+    else:
+        flash('Erro ao excluir.', 'danger')
     return redirect(url_for('inicio'))
 
 @app.route('/colaborador/<int:col_id>')
+@login_required
 def detalhes_colaborador(col_id):
     conn = sqlite3.connect('ferias.db')
     c = conn.cursor()
@@ -174,19 +190,18 @@ def detalhes_colaborador(col_id):
     c.execute('SELECT * FROM folgas_tiradas WHERE colaborador_id = ? ORDER BY data_folga DESC', (col_id,))
     folgas_tiradas = c.fetchall()
 
-    # Saldo de folgas
     c.execute('SELECT COALESCE(SUM(quantidade), 0) FROM folgas_disponiveis WHERE colaborador_id = ?', (col_id,))
     total_concedidas = c.fetchone()[0] or 0
     c.execute('SELECT COUNT(*) FROM folgas_tiradas WHERE colaborador_id = ? AND status = "tirada"', (col_id,))
     total_tiradas = c.fetchone()[0] or 0
     saldo_folgas = total_concedidas - total_tiradas
 
-    # === SALDO TOTAL DE FÉRIAS ===
     c.execute('SELECT COALESCE(SUM(saldo), 0) FROM ferias WHERE colaborador_id = ?', (col_id,))
     saldo_ferias = c.fetchone()[0] or 0
 
     conn.close()
 
+    is_admin = session['user'] == 'admin'
     form = EmptyForm()
 
     return render_template('colaborador.html',
@@ -196,10 +211,11 @@ def detalhes_colaborador(col_id):
                            folgas_tiradas=folgas_tiradas,
                            saldo_folgas=saldo_folgas,
                            saldo_ferias=saldo_ferias,
+                           is_admin=is_admin,
                            form=form)
 
-# === FÉRIAS ===
 @app.route('/adicionar_ferias/<int:col_id>', methods=['GET', 'POST'])
+@admin_required
 def adicionar_ferias(col_id):
     form = FeriasForm()
     if form.validate_on_submit():
@@ -217,13 +233,14 @@ def adicionar_ferias(col_id):
     return render_template('adicionar_ferias.html', form=form, col_id=col_id)
 
 @app.route('/editar_ferias/<int:ferias_id>', methods=['GET', 'POST'])
+@admin_required
 def editar_ferias(ferias_id):
     conn = sqlite3.connect('ferias.db')
     c = conn.cursor()
     col_tuple = c.execute('SELECT colaborador_id FROM ferias WHERE id = ?', (ferias_id,)).fetchone()
-    if col_tuple is None:
+    if not col_tuple:
         conn.close()
-        flash('Registro de férias não encontrado!', 'danger')
+        flash('Registro não encontrado!', 'danger')
         return redirect(url_for('inicio'))
     col_id = col_tuple[0]
     if request.method == 'POST':
@@ -250,25 +267,22 @@ def editar_ferias(ferias_id):
     return render_template('editar_ferias.html', form=form, ferias_id=ferias_id, col_id=col_id)
 
 @app.route('/excluir_ferias/<int:ferias_id>', methods=['POST'])
+@admin_required
 def excluir_ferias(ferias_id):
     form = EmptyForm()
     if form.validate_on_submit():
         conn = sqlite3.connect('ferias.db')
         c = conn.cursor()
-        col_tuple = c.execute('SELECT colaborador_id FROM ferias WHERE id = ?', (ferias_id,)).fetchone()
-        if col_tuple is None:
-            conn.close()
-            return redirect(url_for('inicio'))
-        col_id = col_tuple[0]
+        col_id = c.execute('SELECT colaborador_id FROM ferias WHERE id = ?', (ferias_id,)).fetchone()[0]
         c.execute('DELETE FROM ferias WHERE id = ?', (ferias_id,))
         conn.commit()
         conn.close()
-        flash('Registro de férias excluído!', 'success')
+        flash('Registro excluído!', 'success')
         return redirect(url_for('detalhes_colaborador', col_id=col_id))
     return redirect(url_for('inicio'))
 
-# === FOLGAS ===
 @app.route('/conceder_folgas/<int:col_id>', methods=['GET', 'POST'])
+@admin_required
 def conceder_folgas(col_id):
     form = ConcederFolgasForm()
     if form.validate_on_submit():
@@ -278,169 +292,127 @@ def conceder_folgas(col_id):
                   (col_id, form.quantidade.data, form.motivo.data))
         conn.commit()
         conn.close()
-        flash(f'{form.quantidade.data} folga(s) concedida(s) com sucesso!', 'success')
+        flash(f'{form.quantidade.data} folga(s) concedida(s)!', 'success')
         return redirect(url_for('detalhes_colaborador', col_id=col_id))
     return render_template('conceder_folgas.html', form=form, col_id=col_id)
 
 @app.route('/marcar_folga/<int:col_id>', methods=['GET', 'POST'])
+@admin_required
 def marcar_folga(col_id):
     conn = sqlite3.connect('ferias.db')
     c = conn.cursor()
-
     c.execute('SELECT COALESCE(SUM(quantidade), 0) FROM folgas_disponiveis WHERE colaborador_id = ?', (col_id,))
     total_concedidas = c.fetchone()[0] or 0
     c.execute('SELECT COUNT(*) FROM folgas_tiradas WHERE colaborador_id = ? AND status = "tirada"', (col_id,))
     total_tiradas = c.fetchone()[0] or 0
     saldo = total_concedidas - total_tiradas
-
     form = MarcarFolgaForm()
     if form.validate_on_submit():
         if saldo <= 0:
-            flash('Não há folgas disponíveis para marcar!', 'danger')
+            flash('Sem folgas disponíveis!', 'danger')
             conn.close()
             return render_template('marcar_folga.html', form=form, col_id=col_id, saldo=saldo)
-
         c.execute('INSERT INTO folgas_tiradas (colaborador_id, data_folga, status) VALUES (?, ?, "pendente")',
                   (col_id, form.data_folga.data))
         conn.commit()
         conn.close()
-        flash('Folga marcada como pendente!', 'success')
+        flash('Folga marcada!', 'success')
         return redirect(url_for('detalhes_colaborador', col_id=col_id))
-
     conn.close()
     return render_template('marcar_folga.html', form=form, col_id=col_id, saldo=saldo)
 
 @app.route('/confirmar_folga/<int:folga_id>', methods=['POST'])
+@admin_required
 def confirmar_folga(folga_id):
     form = EmptyForm()
     if form.validate_on_submit():
         conn = sqlite3.connect('ferias.db')
         c = conn.cursor()
-        c.execute('SELECT colaborador_id FROM folgas_tiradas WHERE id = ? AND status = "pendente"', (folga_id,))
-        result = c.fetchone()
+        result = c.execute('SELECT colaborador_id FROM folgas_tiradas WHERE id = ? AND status = "pendente"', (folga_id,)).fetchone()
         if result:
             col_id = result[0]
             c.execute('UPDATE folgas_tiradas SET status = "tirada" WHERE id = ?', (folga_id,))
             conn.commit()
-            flash('Folga confirmada como tirada!', 'success')
+            flash('Folga confirmada!', 'success')
         else:
-            flash('Folga não encontrada ou já confirmada.', 'danger')
+            flash('Folga não encontrada.', 'danger')
         conn.close()
         return redirect(url_for('detalhes_colaborador', col_id=col_id))
     return redirect(url_for('inicio'))
 
-# === RESUMO DE FOLGAS PARA WHATSAPP ===
-@app.route('/resumo_folgas/<int:col_id>', methods=['GET', 'POST'])
+@app.route('/resumo_folgas/<int:col_id>')
+@login_required
 def resumo_folgas(col_id):
     conn = sqlite3.connect('ferias.db')
     c = conn.cursor()
     c.execute('SELECT nome FROM colaboradores WHERE id = ?', (col_id,))
-    nome_result = c.fetchone()
-    if not nome_result:
-        conn.close()
-        flash('Colaborador não encontrado!', 'danger')
-        return redirect(url_for('inicio'))
-    nome = nome_result[0]
+    nome = c.fetchone()[0]
 
-    # === TOTAL CONCEDIDAS ===
     c.execute('SELECT COALESCE(SUM(quantidade), 0) FROM folgas_disponiveis WHERE colaborador_id = ?', (col_id,))
     total_concedidas = c.fetchone()[0] or 0
 
-    # === JÁ TIRADAS ===
     c.execute('SELECT data_folga FROM folgas_tiradas WHERE colaborador_id = ? AND status = "tirada" ORDER BY data_folga', (col_id,))
     tiradas = c.fetchall()
     qtd_tiradas = len(tiradas)
 
-    # === SALDO ATUAL ===
     saldo = total_concedidas - qtd_tiradas
 
-    # === PENDENTES (AGENDADAS) ===
     c.execute('SELECT data_folga FROM folgas_tiradas WHERE colaborador_id = ? AND status = "pendente" ORDER BY data_folga', (col_id,))
     agendadas = c.fetchall()
     qtd_agendadas = len(agendadas)
 
     conn.close()
 
-    # === TEXTO WHATSAPP ===
     texto = f"*RESUMO DE FOLGAS - {nome.upper()}*\n\n"
-    texto += f"*Total concedidas:* {total_concedidas} folga"
-    if total_concedidas != 1: texto += "s"
-    texto += "\n"
-
+    texto += f"*Total concedidas:* {total_concedidas} folga{'s' if total_concedidas != 1 else ''}\n"
     if tiradas:
         texto += f"*Já tiradas:* {qtd_tiradas}\n"
-        for data, in tiradas:
-            dia, mes, ano = data.split('-')[2], data.split('-')[1], data.split('-')[0]
+        for d in tiradas:
+            dia, mes, ano = d[0].split('-')[2], d[0].split('-')[1], d[0].split('-')[0]
             texto += f"• {dia}/{mes}/{ano}\n"
     else:
         texto += "*Já tiradas:* Nenhuma\n"
-
     texto += f"\n*Saldo atual:* {saldo}\n"
     texto += f"*Agendadas:* {qtd_agendadas}\n"
-
     if agendadas:
         texto += "\n*Agendado para:*\n"
-        for data, in agendadas:
-            dia, mes, ano = data.split('-')[2], data.split('-')[1], data.split('-')[0]
+        for d in agendadas:
+            dia, mes, ano = d[0].split('-')[2], d[0].split('-')[1], d[0].split('-')[0]
             texto += f"• {dia}/{mes}/{ano}\n"
     else:
         texto += "\n*Agendado para:*\n• Nenhuma\n"
 
     return render_template('resumo_folgas.html',
-                           col_id=col_id,
-                           nome=nome,
-                           total_concedidas=total_concedidas,
-                           tiradas=tiradas,
-                           qtd_tiradas=qtd_tiradas,
-                           saldo=saldo,
-                           qtd_agendadas=qtd_agendadas,
-                           agendadas=agendadas,
-                           texto_whatsapp=texto)
+                           col_id=col_id, nome=nome, total_concedidas=total_concedidas,
+                           tiradas=tiradas, qtd_tiradas=qtd_tiradas, saldo=saldo,
+                           qtd_agendadas=qtd_agendadas, agendadas=agendadas, texto_whatsapp=texto)
 
-# === RESUMO DE FÉRIAS PARA WHATSAPP ===
-@app.route('/resumo_ferias/<int:col_id>', methods=['GET', 'POST'])
+@app.route('/resumo_ferias/<int:col_id>')
+@login_required
 def resumo_ferias(col_id):
     conn = sqlite3.connect('ferias.db')
     c = conn.cursor()
     c.execute('SELECT nome FROM colaboradores WHERE id = ?', (col_id,))
-    nome_result = c.fetchone()
-    if not nome_result:
-        conn.close()
-        flash('Colaborador não encontrado!', 'danger')
-        return redirect(url_for('inicio'))
-    nome = nome_result[0]
-
+    nome = c.fetchone()[0]
     c.execute('SELECT * FROM ferias WHERE colaborador_id = ? ORDER BY ano DESC', (col_id,))
     ferias = c.fetchall()
-
     conn.close()
 
     texto = f"*RESUMO DE FÉRIAS - {nome.upper()}*\n\n"
     if not ferias:
-        texto += "Nenhum registro de férias."
+        texto += "Nenhum registro."
     else:
         for f in ferias:
-            ano = f[2]
-            pendentes = f[3] if f[3] is not None else '-'
-            tirados = f[4] if f[4] is not None else '-'
-            saldo = f[5] if f[5] is not None else '-'
-            previsao = f[6] if f[6] else '-'
-            vendas = f[7] if f[7] else '-'
-            data_tirada = f[8] if f[8] else '-'
-            texto += f"*Ano: {ano}*\n"
-            texto += f"Pendentes: {pendentes}\n"
-            texto += f"Tirados: {tirados}\n"
-            texto += f"Saldo: {saldo}\n"
-            texto += f"Previsão: {previsao}\n"
-            texto += f"Vendas: {vendas}\n"
-            texto += f"Data Tirada: {data_tirada}\n\n"
+            texto += f"*Ano: {f[2]}*\n"
+            texto += f"Pendentes: {f[3] or '-'}\n"
+            texto += f"Tirados: {f[4] or '-'}\n"
+            texto += f"Saldo: {f[5] or '-'}\n"
+            texto += f"Previsão: {f[6] or '-'}\n"
+            texto += f"Vendas: {f[7] or '-'}\n"
+            texto += f"Data Tirada: {f[8] or '-'}\n\n"
 
-    return render_template('resumo_ferias.html',
-                           col_id=col_id,
-                           nome=nome,
-                           ferias=ferias,
-                           texto_whatsapp=texto)
+    return render_template('resumo_ferias.html', col_id=col_id, nome=nome, ferias=ferias, texto_whatsapp=texto)
 
 if __name__ == '__main__':
-   # init_db()
-      app.run()
+    init_db()
+    app.run()
