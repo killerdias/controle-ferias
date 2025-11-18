@@ -323,6 +323,7 @@ def marcar_folga(col_id):
 
 @app.route('/confirmar_folga/<int:folga_id>', methods=['POST'])
 @admin_required
+@csrf.exempt
 def confirmar_folga(folga_id):
     form = EmptyForm()
     if form.validate_on_submit():
