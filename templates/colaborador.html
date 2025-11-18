@@ -122,12 +122,14 @@
           <td>
             {% if session['user'] == 'admin' %}
             {% if f[3] == 'pendente' %}
-            <form action="{{ url_for('confirmar_folga', folga_id=f[0]) }}" method="post" class="d-inline">
-              <button type="submit" class="btn btn-success btn-xs" onclick="return confirm('Confirmar como tirada?')">
-                Confirmar
-              </button>
-            </form>
-            {% endif %}
+<form action="{{ url_for('confirmar_folga', folga_id=f[0]) }}" method="post" class="d-inline">
+    {{ form.hidden_tag() }}
+    <button type="submit" class="btn btn-success btn-xs" 
+            onclick="return confirm('Confirmar como tirada?')">
+        Confirmar
+    </button>
+</form>
+{% endif %}
             {% endif %}
           </td>
         </tr>
